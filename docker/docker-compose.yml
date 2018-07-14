@@ -1,0 +1,26 @@
+version: "2"
+
+services:
+    mysql:
+        container_name: binatomic_mysql
+        restart: always
+        image: mysql:5.5
+        volumes:
+          - ./data/mysql:/var/lib/mysql
+        ports:
+          - "3306:3306"
+        environment:
+          MYSQL_ROOT_PASSWORD: password
+
+    php:
+        build: ./docker/php7
+        container_name: binatomic_php7
+        restart: always
+        links:
+          - mysql:db
+        ports:
+          - "80:80" # frontend
+          - "443:443" # https for frontend
+        volumes:
+          - ../:/var/www/html
+        tty: true
