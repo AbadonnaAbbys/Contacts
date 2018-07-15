@@ -2,7 +2,7 @@ version: "2"
 
 services:
     mysql:
-        container_name: binatomic_mysql
+        container_name: contacts_mysql
         restart: always
         image: mysql:5.5
         volumes:
@@ -14,7 +14,7 @@ services:
 
     php:
         build: ./docker/php7
-        container_name: binatomic_php7
+        container_name: contacts_php7
         restart: always
         links:
           - mysql:db

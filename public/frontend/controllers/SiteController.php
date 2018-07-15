@@ -1,7 +1,9 @@
 <?php
+
 namespace frontend\controllers;
 
-use common\models\Contact;
+use frontend\services\ContactService;
+use frontend\models\Contact;
 use Yii;
 use yii\base\InvalidParamException;
 use yii\data\ActiveDataProvider;
@@ -14,7 +16,7 @@ use common\models\LoginForm;
 use frontend\models\PasswordResetRequestForm;
 use frontend\models\ResetPasswordForm;
 use frontend\models\SignupForm;
-use frontend\models\ContactForm;
+use yii\web\UploadedFile;
 
 /**
  * Site controller
@@ -44,7 +46,7 @@ class SiteController extends Controller
                 ],
                 'denyCallback' => function ($rule, $action) {
                     return $this->redirect(['site/login']);
-                }
+                },
             ],
             'verbs' => [
                 'class' => VerbFilter::class,
@@ -74,12 +76,26 @@ class SiteController extends Controller
      */
     public function actionIndex()
     {
-
         if (!Yii::$app->user->id) {
             return $this->redirect(['site/login']);
         }
 
-        $query = Contact::find()->where(['user_id' => Yii::$app->user->id])->orderBy('name');
+        $model = new Contact();
+        if (!is_null(Yii::$app->request->post('Contact'))) {
+            $post = Yii::$app->request->post();
+            if (key_exists('id', $post['Contact']) && !empty($post['Contact']['id'])) {
+                $model = Contact::findOne((int)$post['Contact']['id']);
+            }
+            if ($model->isNewRecord) {
+                $model->user_id = Yii::$app->user->id;
+            }
+            if ($model->load($post) && $model->save() && $model->saveImages()) {
+                $model = new Contact();
+            }
+        }
+        $uploadForm = ContactService::prepareImages($model);
+
+        $query = Contact::find()->orderBy('id ASC, name ASC');
         $contactsProvider = new ActiveDataProvider([
             'query' => $query,
             'pagination' => [
@@ -87,35 +103,7 @@ class SiteController extends Controller
             ],
         ]);
 
-        $formModel = new ContactForm();
-
-        return $this->render('index', ['contactsProvider' => $contactsProvider, 'formModel' => $formModel]);
-    }
-
-    /**
-     * @return string
-     */
-    public function actionCreateContact()
-    {
-        $formModel = new ContactForm();
-        $success = false;
-
-        if (Yii::$app->request->isAjax) {
-            /** @var Contact $contact */
-            $contact = new Contact();
-            $contact->load(Yii::$app->request->post(), 'ContactForm');
-            $contact->user_id = Yii::$app->user->id;
-            if ($contact->validate()) {
-                $success = $contact->save(false);
-            } else {
-                $formModel->setAttributes($contact->getAttributes());
-                $success = false;
-            }
-        }
-        return $this->asJson([
-            'success' => $success,
-            'html' => $this->renderPartial('contactForm', ['model' => $formModel]),
-        ]);
+        return $this->render('index', ['contactsProvider' => $contactsProvider, 'model' => $model, 'uploadForm' => $uploadForm]);
     }
 
     /**
@@ -133,20 +121,24 @@ class SiteController extends Controller
                 if ($contact) {
                     try {
                         $contact->delete();
-                    } catch (StaleObjectException $e) {
+                    }
+                    catch (StaleObjectException $e) {
                         $error = 'Can\'t delete';
-                    } catch (\Throwable $e) {
+                    }
+                    catch (\Throwable $e) {
                         $error = 'Can\'t delete';
                     }
                 }
-            } else {
+            }
+            else {
                 $error = 'ID not set';
             }
         }
+
         return $this->asJson([
-            'success' => empty($error),
-            'error' => $error,
-        ]);
+                                 'success' => empty($error),
+                                 'error' => $error,
+                             ]);
     }
 
     /**
@@ -163,7 +155,8 @@ class SiteController extends Controller
         $model = new LoginForm();
         if ($model->load(Yii::$app->request->post()) && $model->login()) {
             return $this->goBack();
-        } else {
+        }
+        else {
             $model->password = '';
 
             return $this->render('login', [
@@ -241,7 +234,8 @@ class SiteController extends Controller
                 Yii::$app->session->setFlash('success', 'Check your email for further instructions.');
 
                 return $this->goHome();
-            } else {
+            }
+            else {
                 Yii::$app->session->setFlash('error', 'Sorry, we are unable to reset password for the provided email address.');
             }
         }
@@ -255,6 +249,7 @@ class SiteController extends Controller
      * Resets password.
      *
      * @param string $token
+     *
      * @return mixed
      * @throws BadRequestHttpException
      */
@@ -262,7 +257,8 @@ class SiteController extends Controller
     {
         try {
             $model = new ResetPasswordForm($token);
-        } catch (InvalidParamException $e) {
+        }
+        catch (InvalidParamException $e) {
             throw new BadRequestHttpException($e->getMessage());
         }
 

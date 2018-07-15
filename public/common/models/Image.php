@@ -14,6 +14,7 @@ use yii\db\ActiveRecord;
  * @property int $contact_id [int(11)]
  * @property string $original_filename [varchar(255)]
  * @property string $file_name [char(32)]
+ * @property Contact $contact
  */
 class Image extends ActiveRecord
 {
@@ -35,9 +36,48 @@ class Image extends ActiveRecord
             [['original_filename', 'file_name'], 'trim'],
             [['contact_id', 'original_filename', 'file_name'], 'required'],
             ['contact_id', 'exist', 'targetClass' => 'common\models\Contact', 'targetAttribute' => 'id'],
-            ['file_name', 'string', 'length' => 32],
-            ['original_filename', 'string', 'length' => [5, 255]],
         ];
     }
 
+    /**
+     * @return \yii\db\ActiveQuery
+     */
+    public function getContact()
+    {
+        return $this->hasOne(Contact::class, ['id' => 'contact_id']);
+    }
+
+    /**
+     * @return string
+     */
+    public function getFilePath()
+    {
+        return \Yii::getAlias('@uploads/') . $this->file_name;
+    }
+
+    /**
+     * @return string
+     */
+    public function getThumbnailPath()
+    {
+        return \Yii::getAlias('@thumbnails/') . $this->file_name;
+    }
+
+    /**
+     * @return bool
+     */
+    public function beforeDelete()
+    {
+        if (!parent::beforeDelete()) {
+            return false;
+        }
+
+        $imagePath = \Yii::getAlias('@uploads/');
+        $thumbPath = \Yii::getAlias('@thumbnails/');
+
+        unlink($imagePath . $this->file_name);
+        unlink($thumbPath . $this->file_name);
+
+        return true;
+    }
 }
